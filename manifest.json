@@ -1,0 +1,16 @@
+{
+  "name": "제주고사리삼 조사야장",
+  "short_name": "고사리삼야장",
+  "description": "제주고사리삼 조사야장 - 오프라인 현장 입력용",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfaf6",
+  "theme_color": "#0f2e1d",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
