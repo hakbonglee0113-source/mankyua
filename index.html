@@ -37,7 +37,7 @@ body{
   background:var(--paper);
   color:var(--ink);
   -webkit-tap-highlight-color:transparent;
-  padding-bottom:90px;
+  padding-bottom:calc(120px + env(safe-area-inset-bottom));
 }
 h1,h2,h3{margin:0;}
 button{font-family:inherit;}
@@ -107,7 +107,7 @@ button{font-family:inherit;}
 
 .card{
   background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
-  margin-bottom:10px; overflow:hidden; border:1px solid var(--line);
+  margin-bottom:10px; border:1px solid var(--line);
 }
 .card-body{padding:12px 12px 14px;}
 
@@ -301,7 +301,7 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
   </div></div>
 </div>
 
-<div class="bottom-bar">
+<div class="bottom-bar" id="bottomBar">
   <button class="btn-prev" id="btnPrev">◀ 이전</button>
   <button class="btn-next" id="btnNext">다음 ▶</button>
 </div>
@@ -1166,9 +1166,23 @@ if("serviceWorker" in navigator){
   });
 }
 
-/* ============ 21. init ============ */
+/* ============ 21. 하단 고정 바에 콘텐츠가 가려지지 않도록 실제 높이 측정 ============ */
+function syncBottomBarSpace(){
+  var bar = document.getElementById("bottomBar");
+  if(!bar) return;
+  var h = bar.offsetHeight;
+  if(h > 0){
+    document.body.style.paddingBottom = (h + 20) + "px";
+  }
+}
+window.addEventListener("resize", syncBottomBarSpace);
+window.addEventListener("orientationchange", function(){ setTimeout(syncBottomBarSpace, 200); });
+
+/* ============ 22. init ============ */
 renderAll();
 updateOnlineStatus();
+syncBottomBarSpace();
+setTimeout(syncBottomBarSpace, 300); // 폰트/세이프에어리어 반영 후 한 번 더 보정
 dbGetAll().then(function(list){
   // 자동으로 가장 최근 항목을 이어서 열지는 않고, 새 빈 조사로 시작 (필드 조사자가 명시적으로 선택하도록)
 });
