@@ -31,7 +31,7 @@
   --shadow:0 1px 3px rgba(15,46,29,0.08), 0 1px 2px rgba(15,46,29,0.06);
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;}
+html,body{margin:0;padding:0;overflow-x:hidden;}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
   background:var(--paper);
@@ -42,35 +42,35 @@ body{
 h1,h2,h3{margin:0;}
 button{font-family:inherit;}
 
-/* ---------- header ---------- */
+/* ---------- header + tabs share ONE sticky wrapper so header height can vary freely without the tabs bar overlapping/clipping it ---------- */
+.top-sticky{ position:sticky; top:0; z-index:40; }
+
 .app-header{
-  position:sticky; top:0; z-index:40;
   background:var(--green-900);
   color:#fff;
-  padding:10px 14px calc(10px + env(safe-area-inset-top)) 14px;
+  padding:10px 10px calc(10px + env(safe-area-inset-top)) 12px;
   padding-top:calc(10px + env(safe-area-inset-top));
-  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  display:flex; align-items:center; justify-content:space-between; gap:6px;
 }
-.app-header .title{display:flex;flex-direction:column;gap:2px;min-width:0;}
-.app-header .title h1{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.app-header .subtitle{font-size:11px;color:#bcd6c6;}
-.header-actions{display:flex;gap:6px;flex-shrink:0;}
+.app-header .title{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
+.app-header .title h1{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.app-header .subtitle{font-size:10.5px;color:#bcd6c6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.header-actions{display:flex;gap:5px;flex-shrink:0;flex-wrap:nowrap;}
 .icon-btn{
-  background:rgba(255,255,255,0.12); color:#fff; border:none; border-radius:10px;
-  padding:8px 10px; font-size:12px; display:flex; align-items:center; gap:4px;
+  background:rgba(255,255,255,0.12); color:#fff; border:none; border-radius:9px;
+  padding:7px 8px; font-size:11px; display:flex; align-items:center; gap:3px; white-space:nowrap; flex-shrink:0;
 }
 .icon-btn:active{background:rgba(255,255,255,0.25);}
 .save-pill{
-  font-size:10.5px; padding:3px 9px; border-radius:20px; background:rgba(255,255,255,0.1); color:#cfe8da;
-  display:inline-flex; align-items:center; gap:4px; white-space:nowrap;
+  font-size:10px; padding:3px 7px; border-radius:20px; background:rgba(255,255,255,0.1); color:#cfe8da;
+  display:inline-flex; align-items:center; gap:4px; white-space:nowrap; flex-shrink:0;
 }
 .save-pill.dirty{background:var(--amber-100);color:#7a4e0c;}
 .save-pill.saved{background:rgba(255,255,255,0.12);color:#bcd6c6;}
-.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;}
 
 /* ---------- tabs ---------- */
 .tabs{
-  position:sticky; top:calc(52px + env(safe-area-inset-top)); z-index:39;
   display:flex; overflow-x:auto; gap:0; background:var(--green-700);
   scrollbar-width:none;
 }
@@ -80,6 +80,20 @@ button{font-family:inherit;}
   background:transparent; border:none; border-bottom:3px solid transparent; white-space:nowrap;
 }
 .tab-btn.active{color:#fff; border-bottom-color:var(--amber-500); background:rgba(255,255,255,0.06);}
+
+/* ---------- narrow-phone tightening ---------- */
+@media (max-width:400px){
+  .app-header .title h1{font-size:12.5px;}
+  .app-header .subtitle{max-width:70px;}
+  .icon-btn{padding:6px 7px;font-size:10px;}
+  .save-pill{padding:3px 5px;font-size:9px;max-width:56px;overflow:hidden;text-overflow:ellipsis;}
+  .header-actions{gap:4px;}
+  .tab-btn{padding:9px 10px;font-size:11.5px;}
+}
+@media (max-width:340px){
+  .app-header .title h1{font-size:11.5px;}
+  .app-header .subtitle{display:none;}
+}
 
 /* ---------- layout ---------- */
 .screen{display:none; padding:14px 12px 8px;}
@@ -135,6 +149,13 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
 .row2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
 .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
 .corner-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+@media (max-width:380px){
+  .row3{grid-template-columns:1fr; gap:10px;}
+}
+@media (max-width:340px){
+  .row2{grid-template-columns:1fr;}
+  .corner-grid{grid-template-columns:1fr;}
+}
 
 /* dynamic lists */
 .dyn-list{display:flex; flex-direction:column; gap:8px; margin-bottom:6px;}
@@ -207,6 +228,7 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
 </head>
 <body>
 
+<div class="top-sticky">
 <div class="app-header">
   <div class="title">
     <h1 id="headerTitle">제주고사리삼 조사야장</h1>
@@ -227,6 +249,8 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
   <button class="tab-btn" data-screen="s4">4. 생물정보</button>
   <button class="tab-btn" data-screen="s5">메모·내보내기</button>
 </div>
+</div>
+<!-- /.top-sticky -->
 
 <div class="voice-banner" id="voiceBanner">이 브라우저는 음성입력(Web Speech API)을 지원하지 않아요. 마이크 버튼 대신 직접 입력해 주세요. (Chrome 계열 브라우저 권장)</div>
 
