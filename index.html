@@ -760,7 +760,7 @@ function populateAllInputs(){
   });
 }
 
-var APP_VERSION = "v9 (2026-07-14)";
+var APP_VERSION = "v10 (2026-07-14)";
 
 function updateHeaderSub(){
   var b = state.basic;
@@ -1084,8 +1084,24 @@ function downloadBlob(filename, content, mime){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
 }
 
+function normalizeDateForFilename(s){
+  if(!s) return "";
+  var m = String(s).match(/(\d{4})\D*(\d{1,2})\D*(\d{1,2})/);
+  if(m){
+    var mm = ("0"+m[2]).slice(-2);
+    var dd = ("0"+m[3]).slice(-2);
+    return m[1] + mm + dd;
+  }
+  var digits = String(s).replace(/[^0-9]/g,"");
+  return digits;
+}
 function baseFileName(){
-  return "조사야장_" + (state.basic.patchId || "patch") + "_" + (state.basic.date||"").replace(/[.\s]/g,"");
+  var dateStr = normalizeDateForFilename(state.basic.date);
+  var patchStr = String(state.basic.patchId||"").trim().replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"");
+  var parts = ["제주고사리삼_조사야장"];
+  if(dateStr) parts.push(dateStr);
+  parts.push(patchStr || "patch");
+  return parts.join("_");
 }
 function escHTML(s){
   return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -1226,7 +1242,7 @@ function buildPrintHTML(){
   }
 
   return (
-    '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>조사야장_'+escHTML(b.patchId||"")+'</title><style>'+css+'</style></head><body>' +
+    '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>'+escHTML(baseFileName())+'</title><style>'+css+'</style></head><body>' +
     '<h1>제주고사리삼 조사야장 (patch unit)</h1>' +
     '<div class="meta">Patch ID: '+escHTML(b.patchId||"-")+' &nbsp;·&nbsp; 조사일자: '+escHTML(b.date||"-")+' &nbsp;·&nbsp; 출력일시: '+new Date().toLocaleString("ko-KR")+'</div>' +
     '<h2>1. 기본정보</h2><table>'+basicRows+'</table>' +
