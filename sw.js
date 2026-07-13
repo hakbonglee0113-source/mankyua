@@ -1,7 +1,7 @@
 // 제주고사리삼 조사야장 - 서비스워커 (오프라인 캐싱)
 // 앱 내용을 바꿔 다시 배포할 때는 아래 CACHE_NAME 뒤 숫자(v1, v2...)를 반드시 올려주세요.
 // 그래야 사용자가 다음에 인터넷이 연결됐을 때 새 버전을 받아갑니다.
-var CACHE_NAME = "jeju-gosarisam-cache-v10";
+var CACHE_NAME = "jeju-gosarisam-cache-v11";
 var ASSETS = [
   "./",
   "./index.html",

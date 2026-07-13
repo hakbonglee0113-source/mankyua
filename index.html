@@ -760,7 +760,7 @@ function populateAllInputs(){
   });
 }
 
-var APP_VERSION = "v10 (2026-07-14)";
+var APP_VERSION = "v11 (2026-07-14)";
 
 function updateHeaderSub(){
   var b = state.basic;
@@ -1290,6 +1290,11 @@ document.getElementById("btnExportPDF").addEventListener("click", function(){
 
   toast("인쇄 화면에서 'PDF로 저장'을 선택하세요.");
 
+  // 일부 브라우저(특히 안드로이드)는 iframe 문서가 아니라 최상위 탭의 title을
+  // 저장 파일명 제안에 사용하므로, 인쇄 직전에 메인 문서 title도 같이 바꿔줍니다.
+  var originalTitle = document.title;
+  document.title = baseFileName();
+
   setTimeout(function(){
     try{
       iframe.contentWindow.focus();
@@ -1301,7 +1306,10 @@ document.getElementById("btnExportPDF").addEventListener("click", function(){
     setTimeout(function(){
       var el = document.getElementById("pdfPrintFrame");
       if(el) el.parentNode.removeChild(el);
+      document.title = originalTitle;
     }, 60000);
+    // 대화상자가 이미 파일명을 읽어간 뒤이므로 탭 제목은 좀 더 빨리 원래대로 되돌려도 안전
+    setTimeout(function(){ document.title = originalTitle; }, 4000);
   }, 400);
 });
 
