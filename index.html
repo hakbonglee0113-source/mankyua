@@ -264,6 +264,7 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
 <!-- /.top-sticky -->
 
 <div class="voice-banner" id="voiceBanner">이 브라우저는 음성입력(Web Speech API)을 지원하지 않아요. 마이크 버튼 대신 직접 입력해 주세요. (Chrome 계열 브라우저 권장)</div>
+<input type="file" accept="image/*" multiple id="quadPhotoInput" style="display:none;">
 
 <!-- SCREEN 1: 기본정보 -->
 <div class="screen active" id="s1">
@@ -358,7 +359,8 @@ function blankQuad(plot){
     stemCount:"", leafAreaPhoto:"", coverPhoto:"",
     vegLeafCount:"", sporeLeafCount:"",
     flora: [],
-    rocks: []
+    rocks: [],
+    photos: []
   };
 }
 function blankState(){
@@ -582,11 +584,19 @@ function renderPatchPhotos(){
   }).join("");
 }
 
+var activeQuadPhotoTarget = null;
 document.addEventListener("click", function(e){
   var btn = e.target.closest && e.target.closest("#btnAddPatchPhoto");
   if(btn){
     var inp = document.getElementById("patchPhotoInput");
     if(inp) inp.click();
+    return;
+  }
+  var qbtn = e.target.closest && e.target.closest("[data-addquadphoto]");
+  if(qbtn){
+    activeQuadPhotoTarget = qbtn.dataset.addquadphoto;
+    var qinp = document.getElementById("quadPhotoInput");
+    if(qinp) qinp.click();
   }
 });
 document.addEventListener("change", function(e){
@@ -599,6 +609,23 @@ document.addEventListener("change", function(e){
         if(!state.basic.patchPhotos) state.basic.patchPhotos = [];
         dataUrls.forEach(function(du){ state.basic.patchPhotos.push({id:newId(), dataUrl:du}); });
         renderPatchPhotos();
+        markDirty(); scheduleSave();
+        toast("사진 " + dataUrls.length + "장 추가됐어요.");
+      })
+      .catch(function(err){ toast("사진 처리 실패: " + err.message); });
+    e.target.value = "";
+  }
+  if(e.target && e.target.id === "quadPhotoInput"){
+    var qfiles = Array.prototype.slice.call(e.target.files || []);
+    var pid = activeQuadPhotoTarget;
+    if(!qfiles.length || !pid){ e.target.value = ""; return; }
+    toast("사진 처리 중...");
+    Promise.all(qfiles.map(function(f){ return resizeImageFile(f, 1280, 0.72); }))
+      .then(function(dataUrls){
+        if(!state.quadrats[pid].photos) state.quadrats[pid].photos = [];
+        dataUrls.forEach(function(du){ state.quadrats[pid].photos.push({id:newId(), dataUrl:du}); });
+        var grid = document.getElementById("quadphotos_"+pid);
+        if(grid) grid.innerHTML = renderQuadPhotoItems(pid);
         markDirty(); scheduleSave();
         toast("사진 " + dataUrls.length + "장 추가됐어요.");
       })
@@ -641,6 +668,10 @@ function renderQuadBio(){
   PLOTS.forEach(function(p){
     var q = state.quadrats[p.id];
     var body = "";
+    body += '<div class="sub-h">방형구 사진</div>';
+    body += '<button type="button" class="add-btn" data-addquadphoto="'+p.id+'" style="margin-bottom:8px;">📷 사진 촬영 / 앨범에서 선택</button>';
+    body += '<div class="photo-grid" id="quadphotos_'+p.id+'">' + renderQuadPhotoItems(p.id) + '</div>';
+
     body += '<div class="sub-h">지상부 줄기 수</div>';
     body += fieldHTML({path:"quadrats."+p.id+".stemCount", label:"지상부 줄기 수", type:"number"});
 
@@ -661,6 +692,19 @@ function renderQuadBio(){
     out += quadCardWrap(p, body, "bio");
   });
   document.getElementById("quadBioList").innerHTML = out;
+}
+
+function renderQuadPhotoItems(plotId){
+  var arr = (state.quadrats[plotId] && state.quadrats[plotId].photos) || [];
+  if(arr.length === 0) return '<div class="small-note">등록된 사진이 없어요.</div>';
+  return arr.map(function(p, idx){
+    return (
+      '<div class="photo-thumb">' +
+        '<img src="'+p.dataUrl+'" alt="방형구 사진 '+(idx+1)+'">' +
+        '<button type="button" class="photo-del" data-rmquadphoto="'+plotId+'" data-idx="'+idx+'">×</button>' +
+      '</div>'
+    );
+  }).join("");
 }
 
 function renderFloraItems(plotId){
@@ -743,6 +787,7 @@ function renderAll(){
     if(!state.quadrats[p.id]) state.quadrats[p.id] = blankQuad(p);
     if(!state.quadrats[p.id].flora) state.quadrats[p.id].flora = [];
     if(!state.quadrats[p.id].rocks) state.quadrats[p.id].rocks = [];
+    if(!state.quadrats[p.id].photos) state.quadrats[p.id].photos = [];
   });
   renderBasic();
   renderQuadCoords();
@@ -760,7 +805,7 @@ function populateAllInputs(){
   });
 }
 
-var APP_VERSION = "v12 (2026-07-14)";
+var APP_VERSION = "v13 (2026-07-14)";
 
 function updateHeaderSub(){
   var b = state.basic;
@@ -849,6 +894,16 @@ document.addEventListener("click", function(e){
     var pidx = parseInt(rmPhoto.dataset.rmphoto, 10);
     state.basic.patchPhotos.splice(pidx, 1);
     renderPatchPhotos();
+    markDirty(); scheduleSave();
+    return;
+  }
+  // remove quad photo
+  var rmQuadPhoto = t.closest && t.closest("[data-rmquadphoto]");
+  if(rmQuadPhoto){
+    var qpid = rmQuadPhoto.dataset.rmquadphoto, qpidx = parseInt(rmQuadPhoto.dataset.idx, 10);
+    state.quadrats[qpid].photos.splice(qpidx, 1);
+    var qgrid = document.getElementById("quadphotos_"+qpid);
+    if(qgrid) qgrid.innerHTML = renderQuadPhotoItems(qpid);
     markDirty(); scheduleSave();
     return;
   }
@@ -1218,9 +1273,17 @@ function buildPrintHTML(){
       return '<tr><td>'+(i+1)+'</td><td>'+escHTML(r.long)+'</td><td>'+escHTML(r.short)+'</td><td>'+escHTML(r.height)+'</td></tr>';
     }).join("") : '<tr><td colspan="4" style="color:#999;">없음</td></tr>';
 
+    var photoImgs = (q.photos && q.photos.length) ? (
+      '<div style="margin-bottom:6px;"><b>방형구 사진</b><br>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' +
+      q.photos.map(function(ph){ return '<img src="'+ph.dataUrl+'" style="width:90px;height:90px;object-fit:cover;border:1px solid #999;border-radius:4px;">'; }).join("") +
+      '</div></div>'
+    ) : "";
+
     return (
       '<div class="quad">' +
         '<h3>'+escHTML(p.label)+(p.type==="central"?" (중심방형구)":"")+'</h3>' +
+        photoImgs +
         '<div class="kv">' +
           '<div><b>모서리좌표</b> '+coordStr+'</div>' +
           '<div><b>수관사진</b> center:'+escHTML(q.canopy.center)+' edge(NW):'+escHTML(q.canopy.edgeNW)+' edge(SE):'+escHTML(q.canopy.edgeSE)+'</div>' +
