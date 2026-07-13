@@ -173,6 +173,17 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
 }
 .add-btn:active{background:#d3ecdd;}
 
+/* patch photo thumbnails */
+.photo-grid{display:flex; flex-wrap:wrap; gap:8px;}
+.photo-thumb{
+  position:relative; width:76px; height:76px; border-radius:10px; overflow:hidden; border:1px solid var(--line); flex:0 0 auto;
+}
+.photo-thumb img{width:100%; height:100%; object-fit:cover; display:block;}
+.photo-del{
+  position:absolute; top:2px; right:2px; width:20px; height:20px; border-radius:50%; border:none;
+  background:rgba(0,0,0,0.55); color:#fff; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;
+}
+
 /* subsection divider inside quad body */
 .sub-h{font-size:12px; font-weight:700; color:var(--green-700); margin:14px 0 8px; padding-top:10px; border-top:1px dashed var(--line);}
 .sub-h:first-child{border-top:none; margin-top:0; padding-top:0;}
@@ -356,7 +367,7 @@ function blankState(){
   return {
     id: "s_" + Date.now() + "_" + Math.random().toString(36).slice(2,7),
     createdAt: Date.now(), updatedAt: Date.now(),
-    basic: {date:"", surveyor:"", weather:"", time:"", siteId:"", patchId:"", adminName:"", patchCenterCoord:"", patchMaxLen:"", patchMinLen:""},
+    basic: {date:"", surveyor:"", weather:"", time:"", siteId:"", patchId:"", adminName:"", patchCenterCoord:"", patchMaxLen:"", patchMinLen:"", patchPhotos:[]},
     quadrats: quads,
     memo: "", reference: ""
   };
@@ -510,6 +521,14 @@ function renderBasic(){
   html += fieldHTML({path:"basic.time", label:"조사시각"});
   html += fieldHTML({path:"basic.siteId", label:"Site ID"});
   html += fieldHTML({path:"basic.patchId", label:"Patch ID"});
+  html += (
+    '<div class="field">' +
+      '<label>패치 사진</label>' +
+      '<input type="file" accept="image/*" multiple id="patchPhotoInput" style="display:none;">' +
+      '<button type="button" class="add-btn" id="btnAddPatchPhoto" style="margin-bottom:8px;">📷 사진 촬영 / 앨범에서 선택</button>' +
+      '<div class="photo-grid" id="patchPhotoGrid"></div>' +
+    '</div>'
+  );
   html += fieldHTML({path:"basic.adminName", label:"행정지명"});
   html += fieldHTML({path:"basic.patchCenterCoord", label:"패치 중심점 좌표", gps:true});
   html += '<div class="row2">';
@@ -517,7 +536,76 @@ function renderBasic(){
   html += fieldHTML({path:"basic.patchMinLen", label:"패치 최소 길이", type:"number"});
   html += '</div>';
   document.getElementById("basicFields").innerHTML = html;
+  renderPatchPhotos();
 }
+
+/* ---------- 패치 사진 (촬영/갤러리 선택, 캔버스로 축소 압축 후 저장) ---------- */
+function resizeImageFile(file, maxDim, quality){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var cw = Math.max(1, Math.round(w * scale));
+        var ch = Math.max(1, Math.round(h * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, cw, ch);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = function(){ reject(new Error("이미지를 읽지 못했어요")); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function(){ reject(new Error("파일을 읽지 못했어요")); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPatchPhotos(){
+  var el = document.getElementById("patchPhotoGrid");
+  if(!el) return;
+  var arr = state.basic.patchPhotos || [];
+  if(arr.length === 0){
+    el.innerHTML = '<div class="small-note">등록된 사진이 없어요.</div>';
+    return;
+  }
+  el.innerHTML = arr.map(function(p, idx){
+    return (
+      '<div class="photo-thumb">' +
+        '<img src="'+p.dataUrl+'" alt="패치 사진 '+(idx+1)+'">' +
+        '<button type="button" class="photo-del" data-rmphoto="'+idx+'">×</button>' +
+      '</div>'
+    );
+  }).join("");
+}
+
+document.addEventListener("click", function(e){
+  var btn = e.target.closest && e.target.closest("#btnAddPatchPhoto");
+  if(btn){
+    var inp = document.getElementById("patchPhotoInput");
+    if(inp) inp.click();
+  }
+});
+document.addEventListener("change", function(e){
+  if(e.target && e.target.id === "patchPhotoInput"){
+    var files = Array.prototype.slice.call(e.target.files || []);
+    if(!files.length) return;
+    toast("사진 처리 중...");
+    Promise.all(files.map(function(f){ return resizeImageFile(f, 1280, 0.72); }))
+      .then(function(dataUrls){
+        if(!state.basic.patchPhotos) state.basic.patchPhotos = [];
+        dataUrls.forEach(function(du){ state.basic.patchPhotos.push({id:newId(), dataUrl:du}); });
+        renderPatchPhotos();
+        markDirty(); scheduleSave();
+        toast("사진 " + dataUrls.length + "장 추가됐어요.");
+      })
+      .catch(function(err){ toast("사진 처리 실패: " + err.message); });
+    e.target.value = "";
+  }
+});
 
 /* ============ 7. render: 방형구 좌표 (Screen 2) ============ */
 function renderQuadCoords(){
@@ -553,12 +641,8 @@ function renderQuadBio(){
   PLOTS.forEach(function(p){
     var q = state.quadrats[p.id];
     var body = "";
-    body += '<div class="sub-h">지상부 줄기 수 / 엽면적·피복 사진번호</div>';
+    body += '<div class="sub-h">지상부 줄기 수</div>';
     body += fieldHTML({path:"quadrats."+p.id+".stemCount", label:"지상부 줄기 수", type:"number"});
-    body += '<div class="row2">';
-    body += fieldHTML({path:"quadrats."+p.id+".leafAreaPhoto", label:"엽면적 사진 번호"});
-    body += fieldHTML({path:"quadrats."+p.id+".coverPhoto", label:"피복(cover) 사진번호", sub:"50×50"});
-    body += '</div>';
 
     body += '<div class="sub-h">영양엽 및 포자엽 수</div>';
     body += '<div class="row2">';
@@ -654,6 +738,12 @@ function renderMemo(){
 
 /* ============ 11. full render + populate values ============ */
 function renderAll(){
+  if(!state.basic.patchPhotos) state.basic.patchPhotos = [];
+  PLOTS.forEach(function(p){
+    if(!state.quadrats[p.id]) state.quadrats[p.id] = blankQuad(p);
+    if(!state.quadrats[p.id].flora) state.quadrats[p.id].flora = [];
+    if(!state.quadrats[p.id].rocks) state.quadrats[p.id].rocks = [];
+  });
   renderBasic();
   renderQuadCoords();
   renderQuadCanopy();
@@ -670,7 +760,7 @@ function populateAllInputs(){
   });
 }
 
-var APP_VERSION = "v8 (2026-07-14)";
+var APP_VERSION = "v9 (2026-07-14)";
 
 function updateHeaderSub(){
   var b = state.basic;
@@ -750,6 +840,15 @@ document.addEventListener("click", function(e){
     var pid4 = rmRock.dataset.rmrock, idx2 = parseInt(rmRock.dataset.idx,10);
     state.quadrats[pid4].rocks.splice(idx2,1);
     document.getElementById("rocks_"+pid4).innerHTML = renderRockItems(pid4);
+    markDirty(); scheduleSave();
+    return;
+  }
+  // remove patch photo
+  var rmPhoto = t.closest && t.closest("[data-rmphoto]");
+  if(rmPhoto){
+    var pidx = parseInt(rmPhoto.dataset.rmphoto, 10);
+    state.basic.patchPhotos.splice(pidx, 1);
+    renderPatchPhotos();
     markDirty(); scheduleSave();
     return;
   }
@@ -951,7 +1050,7 @@ function buildFormText(){
   PLOTS.forEach(function(p){
     var q = state.quadrats[p.id];
     lines.push("- " + p.label);
-    lines.push("  지상부 줄기 수: " + (q.stemCount||"") + "   엽면적 사진번호: " + (q.leafAreaPhoto||"") + "   피복(50x50) 사진번호: " + (q.coverPhoto||""));
+    lines.push("  지상부 줄기 수: " + (q.stemCount||""));
     lines.push("  영양엽 수: " + (q.vegLeafCount||"") + "   포자엽 수: " + (q.sporeLeafCount||""));
     if(q.flora.length){
       lines.push("  식물상: " + q.flora.map(function(f){ return f.name; }).filter(Boolean).join(", "));
@@ -1021,12 +1120,12 @@ function buildExcelHTML(){
     return [
       p.label, coordStr,
       q.canopy.center, q.canopy.edgeNW, q.canopy.edgeSE,
-      q.stemCount, q.leafAreaPhoto, q.coverPhoto,
+      q.stemCount,
       q.vegLeafCount, q.sporeLeafCount,
       floraStr, q.flora.length, q.rocks.length
     ];
   });
-  var t2 = table("방형구별요약", ["방형구","모서리좌표","수관center사진","수관edgeNW사진","수관edgeSE사진","지상부줄기수","엽면적사진번호","피복(50x50)사진번호","영양엽수","포자엽수","식물상(요약)","식물종수","암석개수"], rows2);
+  var t2 = table("방형구별요약", ["방형구","모서리좌표","수관center사진","수관edgeNW사진","수관edgeSE사진","지상부줄기수","영양엽수","포자엽수","식물상(요약)","식물종수","암석개수"], rows2);
 
   // 시트3: 식물상 상세 (long format, 무한 추가분 전부 행으로)
   var rows3 = [];
@@ -1105,7 +1204,6 @@ function buildPrintHTML(){
           '<div><b>모서리좌표</b> '+coordStr+'</div>' +
           '<div><b>수관사진</b> center:'+escHTML(q.canopy.center)+' edge(NW):'+escHTML(q.canopy.edgeNW)+' edge(SE):'+escHTML(q.canopy.edgeSE)+'</div>' +
           '<div><b>지상부 줄기 수</b> '+escHTML(q.stemCount)+'</div>' +
-          '<div><b>엽면적/피복 사진번호</b> '+escHTML(q.leafAreaPhoto)+' / '+escHTML(q.coverPhoto)+'</div>' +
           '<div><b>영양엽 / 포자엽 수</b> '+escHTML(q.vegLeafCount)+' / '+escHTML(q.sporeLeafCount)+'</div>' +
         '</div>' +
         '<div style="margin-bottom:6px;"><b>식물상</b><br>'+floraTags+'</div>' +
@@ -1116,11 +1214,23 @@ function buildPrintHTML(){
     );
   }).join("");
 
+  var photos = state.basic.patchPhotos || [];
+  var photoSection = "";
+  if(photos.length){
+    photoSection = (
+      '<h2>패치 사진</h2>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+      photos.map(function(p){ return '<img src="'+p.dataUrl+'" style="width:150px;height:150px;object-fit:cover;border:1px solid #999;border-radius:6px;">'; }).join("") +
+      '</div>'
+    );
+  }
+
   return (
     '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>조사야장_'+escHTML(b.patchId||"")+'</title><style>'+css+'</style></head><body>' +
     '<h1>제주고사리삼 조사야장 (patch unit)</h1>' +
     '<div class="meta">Patch ID: '+escHTML(b.patchId||"-")+' &nbsp;·&nbsp; 조사일자: '+escHTML(b.date||"-")+' &nbsp;·&nbsp; 출력일시: '+new Date().toLocaleString("ko-KR")+'</div>' +
     '<h2>1. 기본정보</h2><table>'+basicRows+'</table>' +
+    photoSection +
     '<h2>2~4. 방형구 정보 · 수관개방도 · 생물정보</h2>' + quadBlocks +
     '<h2>특이사항 등 메모 / 참고사항</h2>' +
     '<table><tr><th style="width:110px;">특이사항 메모</th><td>'+escHTML(state.memo||"").replace(/\n/g,"<br>")+'</td></tr>' +
