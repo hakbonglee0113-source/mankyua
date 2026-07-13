@@ -760,7 +760,7 @@ function populateAllInputs(){
   });
 }
 
-var APP_VERSION = "v11 (2026-07-14)";
+var APP_VERSION = "v12 (2026-07-14)";
 
 function updateHeaderSub(){
   var b = state.basic;
@@ -1095,11 +1095,16 @@ function normalizeDateForFilename(s){
   var digits = String(s).replace(/[^0-9]/g,"");
   return digits;
 }
+function sanitizeForFilename(s){
+  return String(s||"").trim().replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"");
+}
 function baseFileName(){
   var dateStr = normalizeDateForFilename(state.basic.date);
-  var patchStr = String(state.basic.patchId||"").trim().replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"");
+  var siteStr = sanitizeForFilename(state.basic.siteId);
+  var patchStr = sanitizeForFilename(state.basic.patchId);
   var parts = ["제주고사리삼_조사야장"];
   if(dateStr) parts.push(dateStr);
+  if(siteStr) parts.push(siteStr);
   parts.push(patchStr || "patch");
   return parts.join("_");
 }
