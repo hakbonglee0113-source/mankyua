@@ -298,6 +298,7 @@ textarea{resize:vertical; min-height:64px; font-family:inherit;}
     </div>
     <div class="small-note">엑셀·PDF 내보내기는 외부 프로그램/인터넷 연결 없이 휴대폰 자체 기능만으로 만들어져서 오프라인에서도 그대로 작동해요. PDF는 "인쇄" 화면이 뜨면 프린터 선택 목록에서 <b>"PDF로 저장"</b>을 선택하시면 돼요.</div>
     <div class="small-note">이 조사 기록은 이 휴대폰의 브라우저(IndexedDB)에 자동 저장돼요. 다른 기기에서 이어서 작업하려면 JSON으로 내보낸 뒤 불러오기 기능을 이용하세요.</div>
+    <div class="small-note" style="margin-top:10px;font-weight:700;color:#1f5c3a;" id="versionTag">앱 버전: 확인중...</div>
   </div></div>
 </div>
 
@@ -366,8 +367,19 @@ var uidCounter = 1;
 function newId(){ return "i" + (uidCounter++) + "_" + Math.random().toString(36).slice(2,6); }
 
 /* ============ 2. path get/set ============ */
+// "quadrats.central.flora[3].name" -> ["quadrats","central","flora",3,"name"]
+function parsePath(path){
+  var parts = [];
+  var segRe = /([^\[\].]+)|\[(\d+)\]/g;
+  var m;
+  while((m = segRe.exec(path)) !== null){
+    if(m[1] !== undefined) parts.push(m[1]);
+    else parts.push(parseInt(m[2],10));
+  }
+  return parts;
+}
 function getPath(obj, path){
-  var parts = path.split(".");
+  var parts = parsePath(path);
   var cur = obj;
   for(var i=0;i<parts.length;i++){
     if(cur==null) return undefined;
@@ -376,11 +388,15 @@ function getPath(obj, path){
   return cur;
 }
 function setPath(obj, path, value){
-  var parts = path.split(".");
+  var parts = parsePath(path);
   var cur = obj;
   for(var i=0;i<parts.length-1;i++){
-    if(cur[parts[i]] == null) cur[parts[i]] = {};
-    cur = cur[parts[i]];
+    var key = parts[i];
+    var nextKey = parts[i+1];
+    if(cur[key] == null){
+      cur[key] = (typeof nextKey === "number") ? [] : {};
+    }
+    cur = cur[key];
   }
   cur[parts[parts.length-1]] = value;
 }
@@ -574,7 +590,7 @@ function renderFloraItems(plotId){
         '<div class="dyn-top"><span class="dyn-idx">식물 '+(idx+1)+'</span>' +
           '<button type="button" class="remove-btn" data-rmflora="'+plotId+'" data-idx="'+idx+'">삭제</button></div>' +
         '<div class="input-group">' +
-          '<input type="text" id="'+inputId+'" data-path="'+path+'" placeholder="종명 / 특징 등">' +
+          '<input type="text" id="'+inputId+'" data-path="'+path+'" value="'+esc(item.name)+'" placeholder="종명 / 특징 등">' +
           '<button type="button" class="mic-btn" data-micfor="'+inputId+'" data-numeric="false">🎤</button>' +
         '</div>' +
       '</div>'
@@ -594,7 +610,7 @@ function renderRockItems(plotId){
         '<div class="field" style="margin-bottom:6px;">'+
           '<label style="font-size:10.5px;">'+label+'</label>'+
           '<div class="input-group">'+
-            '<input type="text" inputmode="decimal" id="'+inputId+'" data-path="'+path+'" placeholder="cm">'+
+            '<input type="text" inputmode="decimal" id="'+inputId+'" data-path="'+path+'" value="'+esc(item[field])+'" placeholder="cm">'+
             '<button type="button" class="mic-btn" data-micfor="'+inputId+'" data-numeric="true">🎤</button>'+
           '</div>'+
         '</div>'
@@ -654,12 +670,15 @@ function populateAllInputs(){
   });
 }
 
+var APP_VERSION = "v8 (2026-07-14)";
+
 function updateHeaderSub(){
   var b = state.basic;
   var parts = [];
   if(b.patchId) parts.push("Patch:"+b.patchId);
   if(b.date) parts.push(b.date);
-  document.getElementById("headerSub").textContent = parts.length ? parts.join(" · ") : "patch unit";
+  var base = parts.length ? parts.join(" · ") : "patch unit";
+  document.getElementById("headerSub").textContent = base + " · " + APP_VERSION;
 }
 
 /* ============ 12. event delegation ============ */
@@ -1106,7 +1125,6 @@ function buildPrintHTML(){
     '<h2>특이사항 등 메모 / 참고사항</h2>' +
     '<table><tr><th style="width:110px;">특이사항 메모</th><td>'+escHTML(state.memo||"").replace(/\n/g,"<br>")+'</td></tr>' +
     '<tr><th>참고사항</th><td>'+escHTML(state.reference||"").replace(/\n/g,"<br>")+'</td></tr></table>' +
-    '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.focus();window.print();},350);};</scr' + 'ipt>' +
     '</body></html>'
   );
 }
@@ -1115,13 +1133,50 @@ document.getElementById("btnExportExcel").addEventListener("click", function(){
   downloadBlob(baseFileName()+".xls", "\ufeff"+buildExcelHTML(), "application/vnd.ms-excel;charset=utf-8");
   toast("엑셀 파일을 내보냈어요. (여는 경고창은 '예/열기' 선택)");
 });
+
+/* PDF: 새 창(window.open) 대신 화면에 보이지 않는 iframe을 이용해 인쇄해요.
+   설치된 PWA(홈 화면 앱)에서는 새 창 띄우기가 막히거나 내용이 비어 보이는 경우가 있어서,
+   같은 페이지 안에서 안정적으로 동작하는 iframe 인쇄 방식을 씁니다. */
 document.getElementById("btnExportPDF").addEventListener("click", function(){
-  var w = window.open("", "_blank");
-  if(!w){ toast("팝업이 차단됐어요. 브라우저 팝업 허용 후 다시 시도해주세요."); return; }
-  w.document.open();
-  w.document.write(buildPrintHTML());
-  w.document.close();
+  var old = document.getElementById("pdfPrintFrame");
+  if(old) old.parentNode.removeChild(old);
+
+  var iframe = document.createElement("iframe");
+  iframe.id = "pdfPrintFrame";
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "1px";
+  iframe.style.height = "1px";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  document.body.appendChild(iframe);
+
+  var doc = iframe.contentWindow && iframe.contentWindow.document;
+  if(!doc){
+    toast("PDF 화면을 여는 데 실패했어요. 다시 시도해주세요.");
+    document.body.removeChild(iframe);
+    return;
+  }
+  doc.open();
+  doc.write(buildPrintHTML());
+  doc.close();
+
   toast("인쇄 화면에서 'PDF로 저장'을 선택하세요.");
+
+  setTimeout(function(){
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(err){
+      toast("인쇄를 열지 못했어요: " + err.message);
+    }
+    // 인쇄 대화상자가 뜬 뒤 정리 (모바일에서 대화상자가 열려있는 동안 iframe이 사라지지 않도록 충분히 지연)
+    setTimeout(function(){
+      var el = document.getElementById("pdfPrintFrame");
+      if(el) el.parentNode.removeChild(el);
+    }, 60000);
+  }, 400);
 });
 
 document.getElementById("btnExportText").addEventListener("click", function(){
@@ -1183,6 +1238,8 @@ renderAll();
 updateOnlineStatus();
 syncBottomBarSpace();
 setTimeout(syncBottomBarSpace, 300); // 폰트/세이프에어리어 반영 후 한 번 더 보정
+var vTag = document.getElementById("versionTag");
+if(vTag) vTag.textContent = "앱 버전: " + APP_VERSION + " — 이 문구가 최신인지로 배포 반영 여부를 확인하세요.";
 dbGetAll().then(function(list){
   // 자동으로 가장 최근 항목을 이어서 열지는 않고, 새 빈 조사로 시작 (필드 조사자가 명시적으로 선택하도록)
 });
